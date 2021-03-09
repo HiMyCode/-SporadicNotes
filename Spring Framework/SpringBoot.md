@@ -19,11 +19,11 @@
 
      - **@Import({AutoConfigurationImportSelector.class})**
 
-     ​	扫描所有jar包类路径下 META‐INF/spring.factories；
+     		扫描所有jar包类路径下 META‐INF/spring.factories；
 
-     ​	把扫描到的文件解析成properties对象；
-
-     ​	从properties中获取到EnableAutoConfiguration.class类（类名）的值，将其添加到容器。    
+     		把扫描到的文件解析成properties对象；
+				
+     		从properties中获取到EnableAutoConfiguration.class类（类名）的值，将其添加到容器。    
 
 ### 1.1.2、自动配置类原理
 
@@ -431,10 +431,10 @@ logging.pattern.file=%d{yyyy‐MM‐dd} === [%thread] === %‐5level === %logger
 
 2. 日志输出格式参数说明
 
-- %d	表示日期时间
+	 %d	表示日期时间
 - %thread  表示线程名
-- %‐5level	 级别从左显示5个字符宽度
-- %logger{50}	 表示logger名字最长50个字符，否则按照句点分割
+	 %‐5level	 级别从左显示5个字符宽度
+	 %logger{50}	 表示logger名字最长50个字符，否则按照句点分割
 - %msg  日志消息
 - %n 是换行符
 
@@ -497,9 +497,156 @@ logging.pattern.file=%d{yyyy‐MM‐dd} === [%thread] === %‐5level === %logger
 
 
 
-# 3、WEB开发
+# 三、WEB开发
 
-## 3.1、SpringBoot对静态资源的映射规则    
+## 3.1、SpringBoot对SpringMVC的自动配置    
+
+官方网址：https://docs.spring.io/spring-boot/docs/2.3.9.RELEASE/reference/htmlsingle/#boot-features-spring-mvc-auto-configuration
+
+### 3.1.1、Spring MVC 自动配置项    
+
+SpringBoot配置类**WebMvcAutoConfiguration**对SpringMVC的默认配置 ：
+
+The auto-configuration adds the following features on top of Spring’s defaults:
+
+- Inclusion of `ContentNegotiatingViewResolver` and `BeanNameViewResolver` beans.
+
+  - 自动配置了视图解析器 
+  - ContentNegotiatingViewResolver：组合所有的视图解析器的，一同其作用
+  - 自定义视图解析器：向容器中添加一个`ViewResolver`类型的视图解析器    
+
+- Support for serving static resources, including support for WebJars (covered [later in this document](https://docs.spring.io/spring-boot/docs/2.3.9.RELEASE/reference/htmlsingle/#boot-features-spring-mvc-static-content))).
+
+  - 静态资源文件夹路径,webjars
+
+- Automatic registration of `Converter`, `GenericConverter`, and `Formatter` beans.
+
+  - 注册 `Converter`转换器    
+
+  - 注册 `Formatter` 转换器    
+
+    ```java
+    @Bean
+    // 在文件中配置日期格式化的规则
+    @ConditionalOnProperty(prefix = "spring.mvc", name = "date‐format")
+    public Formatter<Date> dateFormatter() {
+    	return new DateFormatter(this.mvcProperties.getDateFormat());
+    }
+    ```
+
+- Support for `HttpMessageConverters` (covered [later in this document](https://docs.spring.io/spring-boot/docs/2.3.9.RELEASE/reference/htmlsingle/#boot-features-spring-mvc-message-converters)).
+
+  - 自定义转换器：向容器中添加一个`HttpMessageConverters`类型的视图解析器   
+
+- Automatic registration of `MessageCodesResolver` (covered [later in this document](https://docs.spring.io/spring-boot/docs/2.3.9.RELEASE/reference/htmlsingle/#boot-features-spring-message-codes)).
+
+  - 定义错误代码生成规则    
+
+- Static `index.html` support.
+
+  - 配置静态首页访问    
+
+- Custom `Favicon` support (covered [later in this document](https://docs.spring.io/spring-boot/docs/2.3.9.RELEASE/reference/htmlsingle/#boot-features-spring-mvc-favicon)).
+
+  - 配置 favicon.ico    
+
+- Automatic use of a `ConfigurableWebBindingInitializer` bean (covered [later in this document](https://docs.spring.io/spring-boot/docs/2.3.9.RELEASE/reference/htmlsingle/#boot-features-spring-mvc-web-binding-initializer)).
+
+  - 配置请求数据绑定
+  - 自定义数据绑定：向容器中添加一个`ConfigurableWebBindingInitializer`类型的数据绑定器，替换默认数据绑定器   
+
+### 3.1.2、Spring MVC 扩展
+
+If you want to keep those Spring Boot MVC customizations and make more [MVC customizations](https://docs.spring.io/spring/docs/5.2.13.RELEASE/spring-framework-reference/web.html#mvc) (interceptors, formatters, view controllers, and other features), you can add your own `@Configuration` class of type `WebMvcConfigurer` but **without**`@EnableWebMvc`.
+
+```java
+// 使用WebMvcConfigurerAdapter可以来扩展SpringMVC的功能
+@Configuration
+public class MyMvcConfig extends WebMvcConfigurerAdapter {
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        super.addViewControllers(registry);
+        registry.addViewController("/atguigu").setViewName("success");
+    }
+}
+```
+
+If you want to provide custom instances of `RequestMappingHandlerMapping`, `RequestMappingHandlerAdapter`, or `ExceptionHandlerExceptionResolver`, and still keep the Spring Boot MVC customizations, you can declare a bean of type `WebMvcRegistrations` and use it to provide custom instances of those components.
+
+**自动扩展原理：**
+
+1. 编写SpringMVC自动配置类：`WebMvcAutoConfiguration`    
+
+   ```java
+   @Configuration
+   public static class EnableWebMvcConfiguration extends DelegatingWebMvcConfiguration {
+       
+       private final WebMvcConfigurerComposite configurers = new WebMvcConfigurerComposite();
+      
+       //从容器中获取所有的WebMvcConfigurer
+       @Autowired(required = false)
+       public void setConfigurers(List<WebMvcConfigurer> configurers) {
+           if (!CollectionUtils.isEmpty(configurers)) {
+           this.configurers.addWebMvcConfigurers(configurers);
+           //一个参考实现；将所有的WebMvcConfigurer相关配置都来一起调用；
+           @Override
+           // public void addViewControllers(ViewControllerRegistry registry) {
+           // for (WebMvcConfigurer delegate : this.delegates) {
+           // delegate.addViewControllers(registry);
+           // }
+           }
+       }
+   }
+   ```
+
+2. SpringBoot自动配置时会导入上述配置文件，@Import(EnableWebMvcConfiguration.class) ，然后和容器中的其他WebMvcConfigurer一起起作用。
+
+### 3.1.3、Spring MVC 全面接管
+
+If you want to take complete control of Spring MVC, you can add your own `@Configuration` annotated with `@EnableWebMvc`, or alternatively add your own `@Configuration`-annotated `DelegatingWebMvcConfiguration` as described in the Javadoc of `@EnableWebMvc`.
+
+```java
+//使用WebMvcConfigurerAdapter可以来扩展SpringMVC的功能
+@EnableWebMvc
+@Configuration
+public class MyMvcConfig extends WebMvcConfigurerAdapter {
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        registry.addViewController("/atguigu").setViewName("success");
+    }
+}
+```
+
+**`@EnableWebMvc`原理：**
+
+```java
+// 导入组件DelegatingWebMvcConfiguration
+@Import(DelegatingWebMvcConfiguration.class)
+public @interface EnableWebMvc { 
+}
+
+// DelegatingWebMvcConfiguration 仅支持SpringMVC最基本的功能
+@Configuration
+public class DelegatingWebMvcConfiguration extends WebMvcConfigurationSupport {
+}
+
+@Configuration
+@ConditionalOnWebApplication
+@ConditionalOnClass({ Servlet.class, DispatcherServlet.class,
+WebMvcConfigurerAdapter.class })
+//容器中没有DelegatingWebMvcConfiguration组件时，自动配置类才生效
+@ConditionalOnMissingBean(WebMvcConfigurationSupport.class)
+@AutoConfigureOrder(Ordered.HIGHEST_PRECEDENCE + 10)
+@AutoConfigureAfter({ DispatcherServletAutoConfiguration.class,
+ValidationAutoConfiguration.class })
+public class WebMvcAutoConfiguration {
+    
+}
+```
+
+### 3.1.4、Spring MVC 部分配置项  
+
+#### 3.1.4.1、SpringBoot对静态资源的映射规则
 
 1. 访问以jar包的方式引入静态资源
 
@@ -519,7 +666,7 @@ logging.pattern.file=%d{yyyy‐MM‐dd} === [%thread] === %‐5level === %logger
 2. 访问以jar包的方式引入静态资源，默认在以下静态资源文件夹查找
 
    - "classpath:/META‐INF/resources/"
-   -  "classpath:/resources/"
+   - "classpath:/resources/"
    - "classpath:/static/"
    - "classpath:/public/"
    - "/"：当前项目根路径    
@@ -531,6 +678,16 @@ logging.pattern.file=%d{yyyy‐MM‐dd} === [%thread] === %‐5level === %logger
 4. 网站浏览器tab页图标
 
    在静态资源文件夹下的所有找 **/favicon.ico 。
+
+### 3.1.5、总结
+
+1. SpringBoot在自动配置大多组件时：
+
+   先看容器中有无用户自定义配置（@Bean、@Component），如有则使用用户配置的；没有时才自动配置；如果有些组件可以有多个（ViewResolver），则将用户自定义配置的和自动默认配置组合起来，共同生效。
+
+2. SpringBoot中有非常多的**xxxConfigurer**帮助我们进行扩展配置 
+
+3. SpringBoot中会有很多的**xxxCustomizer**帮助我们进行定制配置    
 
 
 
@@ -586,6 +743,571 @@ public class ThymeleafProperties {
 ```
 
 
+
+## 3.3、
+
+
+
+
+
+## 3.4、SpringBoot异常处理机制
+
+### 3.4.1、SpringBoot默认异常处理机制策略
+
+(1) 浏览器访问
+
+​	根据请求头中有**Accept:text/html**确定。返回错误页面。
+
+(2) 客户端访问
+
+​	根据请求头中无**Accept:text/html**确定。返回错误JSON数据。
+
+### 3.4.2、SpringBoot默认异常处理原理
+
+​	SpringBoot使用**ErrorMvcAutoConfiguration**进行错误处理的自动配置。该类为容器中添加一下组件：
+
+1. **ErrorPageCustomizer**    
+
+   当系统出现**4xx**或**5xx**错误时，ErrorPageCustomizer就会生效（定制错误的响应规则）。从配置文件中取出配置错误页面的解析路径：@Value("${error.path:/error}")
+
+2. **BasicErrorController**   
+
+   处理默认/error请求：@RequestMapping({"${server.error.path:${error.path:/error}}"})。
+
+   - 根据请求头中有无**Accept:text/html**确定。返回
+
+     - 错误页面
+
+       调用DefaultErrorViewResolver进行解析。
+
+     - 错误JSON数据
+
+3. **DefaultErrorAttributes**    
+
+   返回错误具体信息：
+
+   - timestamp：时间戳 
+   - status：状态码 
+   - error：错误提示  
+   - exception：异常对象 
+   - message：异常消息 
+   - errors：JSR303数据校验的错误都在这里    
+
+4. **DefaultErrorViewResolver**
+
+   根据错误异常码httpStatus进行解析 ：
+
+   - 有模板引擎
+
+     在templates目录下查找视图：error/httpStatus.html
+
+   - 无模板引擎
+
+     在静态资源目录下查找视图：error/httpStatus.html
+
+   若无精确匹配的httpStatus.html页面。将根据是否匹配默认的**4xx**或**5xx**错误进行匹配。若仍不匹配，则返回
+
+SpringBoot默认的错误提示页面。
+
+
+
+
+
+
+
+
+
+## 3.5、配置嵌入式Servlet容器    
+
+### 3.5.1、修改Servlet容器相关配置
+
+#### 3.5.1.1、配置ServerProperties   
+
+```properties
+## 通用Servlet容器设置：server.xxx
+server.port=8081
+server.context‐path=/crud
+
+## Tomcat容器设置：server.tomcat.xxx
+server.tomcat.uri‐encoding=UTF‐8
+```
+
+#### 3.5.1.2、配置EmbeddedServletContainerCustomizer    
+
+```java
+// 通过定制嵌入式Servlet容器，修改Servlet容器的配置
+@Bean 
+public EmbeddedServletContainerCustomizer embeddedServletContainerCustomizer(){
+    return new EmbeddedServletContainerCustomizer() {
+    	//定制嵌入式的Servlet容器相关的规则
+        @Override
+        public void customize(ConfigurableEmbeddedServletContainer container) {
+        	container.setPort(8083);
+   	 	}
+    }
+}
+```
+
+
+
+### 3.5.2、注册Servlet三大组件
+
+#### 3.5.2.1、Servlet
+
+```java
+@Bean
+public ServletRegistrationBean myServlet(){
+    ServletRegistrationBean registrationBean = new ServletRegistrationBean(new
+    MyServlet(),"/myServlet");
+    return registrationBean;
+}
+```
+
+#### 3.5.2.2、Filter
+
+```java
+@Bean
+public FilterRegistrationBean myFilter(){
+    FilterRegistrationBean registrationBean = new FilterRegistrationBean();
+    registrationBean.setFilter(new MyFilter());
+    registrationBean.setUrlPatterns(Arrays.asList("/hello","/myServlet"));
+    return registrationBean;
+}
+```
+
+#### 3.5.2.3、Listener
+
+```java
+@Bean
+public ServletListenerRegistrationBean myListener(){
+    ServletListenerRegistrationBean<MyListener> registrationBean = new
+        ServletListenerRegistrationBean<>(new MyListener());
+    return registrationBean;
+}
+```
+
+### 3.5.3、指定嵌入式Servlet容器    
+
+#### 3.5.3.1、Tomcat（默认使用）    
+
+```xml
+<!-- 引入的web模块默认使用的就是嵌入式的Tomcat作为Servlet容器 -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring‐boot‐starter‐web</artifactId>
+</dependency>
+```
+
+#### 3.5.3.2、Jetty    
+
+```xml
+<!‐‐ 引入web模块：排除默认使用的Tomcat容器 ‐‐>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring‐boot‐starter‐web</artifactId>
+        <exclusions>
+            <exclusion>
+            <artifactId>spring‐boot‐starter‐tomcat</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            </exclusion>
+        </exclusions>
+</dependency>
+
+<!‐‐引入其他的Servlet容器‐‐>
+<dependency>
+    <artifactId>spring‐boot‐starter‐jetty</artifactId>
+    <groupId>org.springframework.boot</groupId>
+</dependency>
+```
+
+#### 3.5.3.3、Undertow    
+
+```xml
+<!‐‐ 引入web模块：排除默认使用的Tomcat容器 ‐‐>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring‐boot‐starter‐web</artifactId>
+        <exclusions>
+            <exclusion>
+            <artifactId>spring‐boot‐starter‐tomcat</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            </exclusion>
+        </exclusions>
+</dependency>
+
+<!‐‐引入其他的Servlet容器‐‐>
+<dependency>
+    <artifactId>spring‐boot‐starter‐undertow</artifactId>
+    <groupId>org.springframework.boot</groupId>
+</dependency>
+```
+
+
+
+
+
+# 四、SpringBoot与数据访问
+
+## 4.1、SpringBoot默认支持数据源
+
+**SpringBoot 2.0以前：**
+
+- TomcatDataSource（默认数据源）
+- HikariDataSource
+- BasicDataSource    
+
+**SpringBoot 2.0以后：**
+
+- GenericDataSource    
+- Dbcp2DataSource 
+- HikariDataSource（默认数据源） 
+- TomcatDataSource
+
+## 4.2、SpringBoot配置默认数据源
+
+使用默认数据源时，只需配置数据源信息即可：
+
+```yaml
+spring:
+    datasource:
+        username: root
+        password: 123456
+        url: jdbc:mysql://192.168.15.22:3306/jdbc
+        driver‐class‐name: com.mysql.jdbc.Driver
+        schema:
+          - classpath:user.sql
+```
+
+## 4.3、SpringBoot数据源自动配置原理
+
+### 4.3.1、DataSourceProperties ：
+
+​	数据源属性相关配置类。
+
+### 4.3.2、DataSourceConfiguration：
+
+- 使用 DataSource
+
+```java
+@ConditionalOnMissingBean({DataSource.class})
+@ConditionalOnProperty(
+	name = {"spring.datasource.type"}
+)
+```
+
+- 使用 Dbcp2
+
+```java
+@Configuration
+@ConditionalOnClass({BasicDataSource.class})
+@ConditionalOnMissingBean({DataSource.class})
+@ConditionalOnProperty(
+    name = {"spring.datasource.type"},
+    havingValue = "org.apache.commons.dbcp2.BasicDataSource",
+    matchIfMissing = true
+)
+  
+@ConfigurationProperties( prefix = "spring.datasource.dbcp2")
+```
+
+- 使用 Hikari
+
+```java
+@Configuration
+@ConditionalOnClass({HikariDataSource.class})
+@ConditionalOnMissingBean({DataSource.class})
+@ConditionalOnProperty(
+    name = {"spring.datasource.type"},
+    havingValue = "com.zaxxer.hikari.HikariDataSource",
+    matchIfMissing = true
+)
+
+@ConfigurationProperties( prefix = "spring.datasource.hikari" )
+```
+
+- 使用 Tomcat
+
+```java
+@Configuration   @ConditionalOnClass({org.apache.tomcat.jdbc.pool.DataSource.class})
+@ConditionalOnMissingBean({DataSource.class})
+@ConditionalOnProperty(
+    name = {"spring.datasource.type"},
+    havingValue = "org.apache.tomcat.jdbc.pool.DataSource",
+    matchIfMissing = true
+)
+
+@ConfigurationProperties(  prefix = "spring.datasource.tomcat" )
+```
+
+
+
+### 4.3.3、DataSourceAutoConfiguration:
+
+- ```
+  DataSourcePoolMetadataProvidersConfiguration
+  ```
+
+- ```
+  DataSourceInitializationConfiguration
+  ```
+
+
+
+## 4.4、整合Druid数据源
+
+- 导入依赖
+
+	<!--引入druid数据源-->
+	<!-- https://mvnrepository.com/artifact/com.alibaba/druid -->
+	<dependency>
+	    <groupId>com.alibaba</groupId>
+	    <artifactId>druid</artifactId>
+	    <version>1.1.8</version>
+	</dependency>
+- 编写配置文件
+
+```yaml
+spring:
+  datasource:
+    username: root
+    password: 123456
+    url: jdbc:mysql://192.168.15.22:3306/jdbc
+    driver-class-name: com.mysql.jdbc.Driver
+    type: com.alibaba.druid.pool.DruidDataSource
+
+	## 以下属性SpringBoot无法自动绑定，需要自定义DataSource并进行绑定
+    initialSize: 5
+    minIdle: 5
+    maxActive: 20
+    maxWait: 60000
+    timeBetweenEvictionRunsMillis: 60000
+    minEvictableIdleTimeMillis: 300000
+    validationQuery: SELECT 1 FROM DUAL
+    testWhileIdle: true
+    testOnBorrow: false
+    testOnReturn: false
+    poolPreparedStatements: true
+	# 配置监控统计拦截的filters，去掉后监控界面sql无法统计，'wall'用于防火墙
+    filters: stat,wall,log4j
+    maxPoolPreparedStatementPerConnectionSize: 20
+    useGlobalDataSourceStat: true
+    connectionProperties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=500
+```
+
+- 自定义数据源
+
+```java
+@Configuration
+public class DruidConfig {
+
+    @ConfigurationProperties(prefix = "spring.datasource")
+    @Bean
+    public DataSource druid(){
+       return new DruidDataSource();
+    }
+
+    //配置Druid的监控
+    //1、配置一个管理后台的Servlet
+    @Bean
+    public ServletRegistrationBean statViewServlet(){
+        ServletRegistrationBean bean = new ServletRegistrationBean(new StatViewServlet(), "/druid/*");
+        Map<String,String> initParams = new HashMap<>();
+        initParams.put("loginUsername","admin");
+        initParams.put("loginPassword","123456");
+        initParams.put("allow","");//默认就是允许所有访问
+        initParams.put("deny","192.168.15.21");
+        bean.setInitParameters(initParams);
+        return bean;
+    }
+
+    //2、配置一个web监控的filter
+    @Bean
+    public FilterRegistrationBean webStatFilter(){
+        FilterRegistrationBean bean = new FilterRegistrationBean();
+        bean.setFilter(new WebStatFilter());
+        Map<String,String> initParams = new HashMap<>();
+        initParams.put("exclusions","*.js,*.css,/druid/*");
+        bean.setInitParameters(initParams);
+        bean.setUrlPatterns(Arrays.asList("/*"));
+        return bean;
+    }
+}
+```
+
+
+
+## 4.5、SpringBoot整合MyBatis
+
+```xml
+<dependency>
+    <groupId>org.mybatis.spring.boot</groupId>
+    <artifactId>mybatis‐spring‐boot‐starter</artifactId>
+    <version>1.3.1</version>
+</dependency>
+```
+
+### 4.5.1、MyBatis注解版
+
+- 自定义ConfigurationCustomizer，指定MyBatis配置规则 
+
+```java
+@Configuration
+public class MyBatisConfig {
+    @Bean
+    public ConfigurationCustomizer configurationCustomizer(){
+        return new ConfigurationCustomizer(){
+            @Override
+            public void customize(Configuration configuration) {
+                configuration.setMapUnderscoreToCamelCase(true);
+            }
+        };
+    }
+}
+```
+
+- 指定Mapper扫描路径
+
+```java
+// 使用MapperScan批量扫描所有的Mapper接口
+@MapperScan(value = "com.demo.springboot.mapper")
+@Configuration
+public class MyBatisConfig {
+
+}
+```
+
+- DepartmentMapper  示例
+
+```java
+public interface DepartmentMapper {
+    @Select("select * from department where id=#{id}")
+    public Department getDeptById(Integer id);
+    
+    @Delete("delete from department where id=#{id}")
+    public int deleteDeptById(Integer id);
+    
+    @Options(useGeneratedKeys = true,keyProperty = "id")
+    @Insert("insert into department(departmentName) values(#{departmentName})")
+    public int insertDept(Department department);
+    
+    @Update("update department set departmentName=#{departmentName} where id=#{id}")
+    public int updateDept(Department department);
+}
+```
+
+
+
+### 4.5.2、MyBatis配置文件版
+
+- 配置mybatis配置文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE configuration
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-config.dtd">
+<configuration>
+    <settings>
+        <setting name="mapUnderscoreToCamelCase" value="true"/>
+    </settings>
+</configuration>
+```
+
+- 全局配置文件中指定mybatis配置文件和mybatis的Mapper文件
+
+```yaml
+mybatis:
+  # 指定全局配置文件位置
+  config-location: classpath:mybatis/mybatis-config.xml
+  # 指定sql映射文件位置
+  mapper-locations: classpath:mybatis/mapper/*.xml
+```
+
+- 编写Mapper class文件
+
+```java
+// @Mapper或者@MapperScan将接口扫描装配到容器中
+@Mapper
+public interface EmployeeMapper {
+
+    public Employee getEmpById(Integer id);
+
+    public void insertEmp(Employee employee);
+}
+```
+
+- 编写Mapper xml文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.atguigu.springboot.mapper.EmployeeMapper">
+   <!-- public Employee getEmpById(Integer id) -->
+    <select id="getEmpById" resultType="com.atguigu.springboot.bean.Employee">
+        SELECT * FROM employee WHERE id = #{id}
+    </select>
+
+     <!-- public void insertEmp(Employee employee) -->
+    <insert id="insertEmp">
+        INSERT INTO employee
+        	(lastName,email,gender,d_id) 
+        VALUES 
+        	(#{lastName},#{email},#{gender},#{dId})
+    </insert>
+</mapper>
+```
+
+
+
+## 4.6、SpringBoot整合SpringData JPA    
+
+1. 编写配置文件
+
+```yaml
+spring:
+    jpa:
+    hibernate:
+        # 更新或者创建数据表结构
+        ddl‐auto: update
+        # 控制台显示SQL
+        show‐sql: true
+```
+
+2. 编写实体类
+
+```java
+// 标注JPA实体类（和数据表映射的类）
+@Entity 
+//@Table指定对应数据表（省略则默认为类名首字母小写：user）
+@Table(name = "tbl_user")
+public class User {
+    @Id // 主键
+    @GeneratedValue(strategy = GenerationType.IDENTITY) //自增
+    private Integer id;
+    
+    @Column(name = "last_name",length = 50) // 数据表列
+    private String lastName;
+    @Column 	// 省略默认列名为属性名
+    private String email;
+}
+```
+
+3. 编写实体类对应的Dao接口
+
+```java
+// 继承JpaRepository
+public interface UserRepository extends JpaRepository<User,Integer> { }
+```
+
+
+
+
+
+
+
+# 五、自定义starter
 
 
 
