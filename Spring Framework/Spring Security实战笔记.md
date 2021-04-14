@@ -108,7 +108,7 @@
 
 **以上配置存在以下问题：**
 
-- 登录首页为Spring Security默认首页；
+- 登录首页为Spring Security默认的首页；
 - 认证用户名及密码为配置文件指定，并未访问数据库。
 
 ## 3.2、定制Spring Security认证
@@ -193,7 +193,7 @@
   <security:logout logout-url="/logout" logout-success-url="/login.jsp"/>
 ```
 
-​	若使用默认的/logout方法（该方法为POST请求），并开启了csrf过滤，则请求该方法时，form表单需要添加：`<security:csrfInput/>`。
+​	若使用默认的/logout方法且开启了csrf过滤，则该方法为POST请求。在请求该方法时，form表单也需要添加：`<security:csrfInput/>`。
 
 ```jsp
 <form action="${pageContext.request.contextPath}/logout" method="post">
@@ -202,20 +202,13 @@
 </form>
 ```
 
+​	如需禁用csrf功能（生产不建议禁用）：
 
+```xml
+<security:csrf disabled="true"/>
+```
 
 ### 3.2.2、定制数据库认证
-
-1. 修改配置文件，指定认证用户信息的来源
-
-   ```xml
-   <!-- 设置Spring Security认证用户信息的来源 -->
-   <security:authentication-manager>
-       <security:authentication-provider user-service-ref="userService">
-           
-       </security:authentication-provider>
-   </security:authentication-manager>
-   ```
 
 2. 重写认证逻辑
 
@@ -242,11 +235,21 @@
    }
    ```
 
-   **注意:**
+2. 修改配置文件，指定认证用户信息的来源
+
+   ```xml
+   <!-- 设置Spring Security认证用户信息的来源 -->
+   <security:authentication-manager>
+       <security:authentication-provider user-service-ref="userService">
+       </security:authentication-provider>
+   </security:authentication-manager>
+   ```
+
+   注意:**
 
    此处用户认证的密码并未被加密，而是使用的明文。
 
-   **扩展：**
+   **扩展：**UserDetails构造器：
 
    ```java
    // 此处的User对象为UserDetails的实现类
@@ -337,9 +340,9 @@
 
 ### 3.3.1、Remember Me功能
 
-​	关键代码：
+​	Remember Me功能 关键代码：
 
-    ```java
+```java
 public abstract class AbstractRememberMeServices implements RememberMeServices,
 InitializingBean, LogoutHandler {
 		public final void loginSuccess(HttpServletRequest request, 
@@ -355,8 +358,7 @@ InitializingBean, LogoutHandler {
 }
 
 //若勾选则调用onLoginSuccess方法
-protected boolean rememberMeRequested(HttpServletRequest request, 
-                                      String parameter) {
+protected boolean rememberMeRequested(HttpServletRequest request, String parameter) {
 		if (this.alwaysRemember) {
   			return true;
     } else {
@@ -379,8 +381,7 @@ protected boolean rememberMeRequested(HttpServletRequest request,
 
 //若勾选了”Remember Me“选项，则调用如下onLoginSuccess方法
 public class PersistentTokenBasedRememberMeServices extends AbstractRememberMeServices {
-    protected void onLoginSuccess(HttpServletRequest request, 
-                                  HttpServletResponse response,
+    protected void onLoginSuccess(HttpServletRequest request, HttpServletResponse response,
                                   Authentication successfulAuthentication) {
         String username = successfulAuthentication.getName();
         PersistentRememberMeToken persistentToken = new PersistentRememberMeToken(username,
@@ -395,8 +396,7 @@ public class PersistentTokenBasedRememberMeServices extends AbstractRememberMeSe
         }
     }
 }
-    ```
-
+```
 根据以上原理，若需要Remember Me功能，则配置如下：
 
 1. Jsp页面添加”记住我“功能
@@ -450,6 +450,8 @@ CREATE TABLE `persistent_logins` (
 											token-validity-seconds="60" remember-me-parameter="remember-me"/>
 ```
 
+​	  `remember-me-parameter="remember-me"`用于指定记住我`input`标签的`name`属性。若`name`属性不为`remember-me`，可在此处指定。
+
 ### 3.3.2、显示当前认证用户名
 
 **方案一：**java获取，页面使用EL表达式获取
@@ -498,9 +500,7 @@ String username = ((SysUser) SecurityContextHolder.getContext().getAuthenticatio
    <!-- <security:global-method-security jsr250-annotations="enabled" /> -->
    ```
 
-   **说明：**
-
-   secured-annotations、pre-post-annotations、jsr250-annotations可同时开启。开启可使用相应的注解。一般视情况使用一种即可。
+   **说明：**secured-annotations、pre-post-annotations、jsr250-annotations可同时开启。开启可使用相应的			注解。一般视情况使用一种即可。
 
 2. 在类或方法上添加权限注解
 
@@ -508,19 +508,18 @@ String username = ((SysUser) SecurityContextHolder.getContext().getAuthenticatio
    @Controller
    @RequestMapping("/product")
    public class ProductController {
-   
-       //@Secured({"ROLE_PRODUCT","ROLE_ADMIN"})//springSecurity内部制定的注解
-       //@RolesAllowed({"ROLE_PRODUCT","ROLE_ADMIN"})//jsr250注解
-       //表示当前类中findAll方法需要ROLE_ADMIN或者ROLE_PRODUCT才能访问
-       @PreAuthorize("hasAnyAuthority('ROLE_PRODUCT','ROLE_ADMIN')")
+       //@PreAuthorize("hasAnyAuthority('ROLE_PRODUCT','ROLE_ADMIN')")//pre-post-annotations
+       // @RolesAllowed({"ROLE_PRODUCT","ROLE_ADMIN"})	// jsr250-annotations
+       // 表示findAll方法需要ROLE_ADMIN或ROLE_PRODUCT才能访问
+       @Secured({"ROLE_PRODUCT","ROLE_ADMIN"}) // springSecurity注解
        @RequestMapping("/findAll")
        public String findAll(){
            return "product-list";
        }
    }
    ```
-
-   ```java
+   
+```java
    //表示当前类中所有方法都需要ROLE_ADMIN或者ROLE_PRODUCT才能访问
    @Controller
    @RequestMapping("/product")
@@ -532,36 +531,36 @@ String username = ((SysUser) SecurityContextHolder.getContext().getAuthenticatio
        }
    }
    ```
-
+   
 3. 在jsp页面菜单上添加权限控制标签
 
-```jsp
-<!-- 关键代码 -->
-<%@taglib uri="http://www.springframework.org/security/tags" prefix="security"%>
-<ul class="sidebar-menu">
-  <li class="header">菜单</li>
-  <li class="treeview">
-    <ul class="treeview-menu">
-      	<!-- 拥有'ROLE_PRODUCT', 'ROLE_ADMIN'角色的用户可见 -->
-      	<security:authorize access="hasAnyRole('ROLE_PRODUCT', 'ROLE_ADMIN')">
-           <li id="system-setting">
-            <a href="${pageContext.request.contextPath}/product/findAll">
-                产品管理
-            </a>
-           </li>
-      	</security:authorize>
-        <!-- 拥有'ROLE_ORDER', 'ROLE_ADMIN'角色的用户可见 -->
-        <security:authorize access="hasAnyRole('ROLE_ORDER', 'ROLE_ADMIN')">
-            <li id="system-setting">
-              <a href="${pageContext.request.contextPath}/order/findAll">
-                  订单管理
-              </a>
-            </li>
-      	</security:authorize>
-    </ul>
-  </li>
-</ul>
-```
+   ```jsp
+   <!-- 关键代码 -->
+   <%@taglib uri="http://www.springframework.org/security/tags" prefix="security"%>
+   <ul class="sidebar-menu">
+     <li class="header">菜单</li>
+     <li class="treeview">
+       <ul class="treeview-menu">
+         	<!-- 拥有'ROLE_PRODUCT', 'ROLE_ADMIN'角色的用户可见 -->
+         	<security:authorize access="hasAnyRole('ROLE_PRODUCT', 'ROLE_ADMIN')">
+              <li id="system-setting">
+               <a href="${pageContext.request.contextPath}/product/findAll">
+                   产品管理
+               </a>
+              </li>
+         	</security:authorize>
+           <!-- 拥有'ROLE_ORDER', 'ROLE_ADMIN'角色的用户可见 -->
+           <security:authorize access="hasAnyRole('ROLE_ORDER', 'ROLE_ADMIN')">
+               <li id="system-setting">
+                 <a href="${pageContext.request.contextPath}/order/findAll">
+                     订单管理
+                 </a>
+               </li>
+         	</security:authorize>
+       </ul>
+     </li>
+   </ul>
+   ```
 
 ### 3.4.2、权限异常处理
 
@@ -601,11 +600,9 @@ public class ControllerExceptionAdvice {
 }
 ```
 
+# 四、Spring Boot 整合 Spring Security
 
-
-# 四、Spring Boot 集成 Spring Security
-
-## 4.1、集中式应用集成
+## 4.1、单体架构应用整合
 
 1. 新建项目导入依赖
 
@@ -621,12 +618,14 @@ public class ControllerExceptionAdvice {
    </dependency>
    ```
 
+   导入**spring-boot-starter-security**依赖后，SpringBoot会默认对security进行配置。如：登入、登出、用户认证方式、默认用户user（密码在启动日志中）等。
+
 2. 添加配置类
 
    ```java
    @Configuration
    @EnableWebSecurity
-   @EnableGlobalMethodSecurity(securedEnabled=true)
+   @EnableGlobalMethodSecurity(securedEnabled=true)	// 开启方法级别的授权
    public class SecurityConfig extends WebSecurityConfigurerAdapter {
    
        @Autowired
@@ -638,7 +637,7 @@ public class ControllerExceptionAdvice {
            return new BCryptPasswordEncoder();
        }
    
-       //指定认证对象的来源
+       // 指定认证对象的来源、加密策略
        public void configure(AuthenticationManagerBuilder auth) throws Exception {
            auth.userDetailsService(userDetailsService).passwordEncoder(passwordEncoder());
        }
@@ -745,4 +744,61 @@ public class ControllerExceptionAdvice {
 
    
 
-## 4.2、分布式应用集成
+## 4.2、分布式应用整合
+
+
+
+
+
+# Spring security进阶
+
+## Spring Security默认过滤器
+
+1. org.springframework.security.web.context.SecurityContextPersistenceFilter
+  首当其冲的一个过滤器，作用之重要，自不必多言。
+  SecurityContextPersistenceFilter主要是使用SecurityContextRepository在session中保存或更新一个
+  SecurityContext，并将SecurityContext给以后的过滤器使用，来为后续filter建立所需的上下文。
+  SecurityContext中存储了当前用户的认证以及权限信息。
+
+2. org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter
+  此过滤器用于集成SecurityContext到Spring异步执行机制中的WebAsyncManager
+
+3. org.springframework.security.web.header.HeaderWriterFilter
+  向请求的Header中添加相应的信息,可在http标签内部使用security:headers来控制
+
+4. org.springframework.security.web.csrf.CsrfFilter
+  csrf又称跨域请求伪造，SpringSecurity会对所有post请求验证是否包含系统生成的csrf的token信息，
+  如果不包含，则报错。起到防止csrf攻击的效果。
+
+5. org.springframework.security.web.authentication.logout.LogoutFilter
+
+   匹配URL为/logout的请求，实现用户退出,清除认证信息。
+6. org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
+  认证操作全靠这个过滤器，默认匹配URL为/login且必须为POST请求。
+7. org.springframework.security.web.authentication.ui.DefaultLoginPageGeneratingFilter
+  如果没有在配置文件中指定认证页面，则由该过滤器生成一个默认认证页面。
+
+8. org.springframework.security.web.authentication.ui.DefaultLogoutPageGeneratingFilter
+  由此过滤器可以生产一个默认的退出登录页面
+
+9. org.springframework.security.web.authentication.www.BasicAuthenticationFilter
+  此过滤器会自动解析HTTP请求中头部名字为Authentication，且以Basic开头的头信息。
+
+10. org.springframework.security.web.savedrequest.RequestCacheAwareFilter
+    通过HttpSessionRequestCache内部维护了一个RequestCache，用于缓存HttpServletRequest
+
+11. org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter
+    针对ServletRequest进行了一次包装，使得request具有更加丰富的API
+
+12. org.springframework.security.web.authentication.AnonymousAuthenticationFilter
+
+    当SecurityContextHolder中认证信息为空,则会创建一个匿名用户存入到SecurityContextHolder中。
+    spring security为了兼容未登录的访问，也走了一套认证流程，只不过是一个匿名的身份。
+
+13. org.springframework.security.web.session.SessionManagementFilter
+    SecurityContextRepository限制同一用户开启多个会话的数量
+14. org.springframework.security.web.access.ExceptionTranslationFilter
+    异常转换过滤器位于整个springSecurityFilterChain的后方，用来转换整个链路中出现的异常
+15. org.springframework.security.web.access.intercept.FilterSecurityInterceptor
+    获取所配置资源访问的授权信息，根据SecurityContextHolder中存储的用户信息来决定其是否有权
+    限。

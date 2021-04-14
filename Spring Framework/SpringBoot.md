@@ -20,7 +20,7 @@
      - **@Import({AutoConfigurationImportSelector.class})**
 
      		扫描所有jar包类路径下 META‐INF/spring.factories；
-
+	
      		把扫描到的文件解析成properties对象；
 				
      		从properties中获取到EnableAutoConfiguration.class类（类名）的值，将其添加到容器。    
@@ -1335,3 +1335,41 @@ debug=true
 </dependency>
 ```
 
+
+
+# 六、Spring Boot实战
+
+## 6.1、Spring Boot使用jsp
+
+1. 导入SpringBoot的tomcat启动插件jar包
+
+   ```xml
+   <dependency>
+     <groupId>org.springframework.boot</groupId>
+     <artifactId>spring-boot-starter-tomcat</artifactId>
+   </dependency>
+   <dependency>
+     <groupId>org.apache.tomcat.embed</groupId>
+     <artifactId>tomcat-embed-jasper</artifactId>
+   </dependency>
+   ```
+
+2. 加入jsp页面等静态资源
+
+   （1）将pom.xml中项目的打包方式改为war：`<packaging>war</packaging>`
+
+   （2）在src/main目录下创建webapp目录
+
+   （3）将WebContent下的静态资源copy到webapp目录下
+
+3. 修改配置文件
+
+   ```yaml
+   spring:
+   	mvc:
+   		view:
+   			prefix: /pages/
+   			suffix: .jsp
+   ```
+
+4. 使用tomcat插件启动项目。
