@@ -70,7 +70,58 @@ DispatcherServlet 使用视图解析器将**逻辑视图名**匹配为一个特�
 
 视图将DispatcherServlet 传递模型数据进行渲染，并将结果传递给客户端。
 
- 
+##  1.6、主要组件介绍
+
+### 1.6.1、HandlerMapping
+
+​	**作用**：解析请求链接，根据请求链接匹配到执行此请求的Handler类。
+
+​		1. 根据配置文件对url到controller的映射进行注册；
+
+​		2. 根据具体的url请求找到执行该请求的controller。
+
+### 1.6.2、HandlerAdapter
+
+​	**作用**：调用具体的方法对用户发来的请求来进行处理。
+
+SpringMVC默认处理适配器（DispatcherServlte会读取DispatcherServlte.properties文件获取）：
+
+- AnnotationMethodHandlerAdapter：适配注解类处理器，适配标注了@Controller的处理器；
+- HttpRequestHandlerAdapter：适配静态资源处理器，适配实现了HttpRequestHandler接口的处理器，用于处理通过SpringMVC来访问的静态资源的请求；
+- SimpleControllerHandlerAdapter：Controller处理适配器，适配实现了Controller接口或
+  Controller接口子类的，如继承MultiActionController；
+
+Servlet处理适配器：
+
+- SimpleServletHandlerAdapter：适配实现了Servlet接口或Servlet的子类的处理器。既可在web.xml中配置Servlet，也可用SpringMVC配置Servlet。
+
+### 1.6.3、HandlerExceptionResolver
+
+​	**作用**：用来捕获所有的异常。
+
+​	使用`<mvc:annotation-driven/>`后，将会向Spring MVC容器中注入以下异常处理器：
+
+- ExceptionHandlerExceptionResolver
+
+  解析处理器类中注解的@ExceptionHandler的方法；
+
+  使用@ControllerAdvice注解的类里的有@ExceptionHandler注解的全局异常处理方法
+
+- ResponseStatusExceptionResolver
+
+  解析有@ResponseStatus注解的异常
+
+- DefaultHandlerExceptionResolver
+
+  按照不同的类型分别对异常进行解析，Spring MVC内部使用。
+
+其他异常处理器：
+
+- SimpleMappingExceptionResolver
+
+  通过配置的异常类和view的对应关系来解析异常。
+
+  
 
 # 二、Spring MVC 配置文件
 
@@ -992,6 +1043,19 @@ public byte[] testDownload(HttpServletResponse response,String fileName) throws 
 
 ## 6.1、 `<context:annotation-config />`
 
+​	用于激活已经在spring容器里注册过的bean上面的注解，向Spring注册如下Bean：
+
+- AutowiredAnnotationBeanPostProcessor ： 处理@Autowired注解
+- CommonAnnotationBeanPostProcessor ： 处理 等注解
+- PersistenceAnnotationBeanPostProcessor ：处理 @PersistenceContext注解
+- RequiredAnnotationBeanPostProcessor ：处理 @Required注解
+
+**注意：**
+
+​		单独使用< context:annotation-config/>对并不能激活@Component、@Controller、@Service等注解。
+
+​		< context:annotation-config/>仅能对已经注册的bean起作用。对没有注册的bean，不能执行任何操作。	
+
 
 
 ## 6.2、 `<context:annotation-driven />`
@@ -1013,15 +1077,17 @@ public byte[] testDownload(HttpServletResponse response,String fileName) throws 
 
 ## 6.3、 `<context:component-scan />`
 
+​		通过对**base-package**配置，就可以扫描到controller包下 service包下 dao包下的@Component、@Controller、@Service等这些注解。
+
+​		配置<context:component-scan />后，<context:annotation-config />将被自动配置。故可以省略<context:annotation-config />。即使显式配置了< context:annotation-config/>也会被忽略。
 
 
 
 
 
+## 6.2、`<mvc: xxxxxx>`
 
-## 6.2、`**<mvc:** xxxxxx>`
-
-### 6.2.1、`**<mvc:default-servlet-handler />**` 
+### 6.2.1、`<mvc:default-servlet-handler />` 
 
 - **用途一：**
 
@@ -1046,11 +1112,68 @@ public byte[] testDownload(HttpServletResponse response,String fileName) throws 
   - WebSphere 						  默认 Servlet的名字 – “SimpleFileServlet”
   ```
 
+**仅配置`<mvc:default-servlet-handler />`后组件导入情况**
+
+- org.springframework.web.servlet.HandlerMapping
+  - SimpleUrlHandlerMapping
+  - BeanNameUrlHandlerMapping
+- org.springframework.web.servlet.HandlerAdapter
+  - HttpRequestHandlerAdapter
+  - SimpleControllerHandlerAdapter
+- org.springframework.web.servlet.HandlerExceptionResolver
+  - AnnotationMethodHandlerExceptionResolver
+  - ResponseStatusExceptionResolver
+  - DefaultHandlerExceptionResolver
+
 ### 6.2.2、 `<mvc:annotation-driven />` 
+
+​	启用注解驱动，支持@RequestMapping注解,这样我们就可以使用@RequestMapping来配置处理器
 
 ​	在开启默认处理器后，将默认servlet无法处理的请求（本该有dispatcherServlet处理的请求）交给dispatcherServlet处理 。
 
 ​	同时使用 `<mvc:default-servlet-handler />` 和 ``<mvc:annotation-driven />`将静态资源的教由Web应用服务器处理，其他请求交由dispatcherServlet处理。
+
+**仅配置`<mvc:annotation-driven />`后组件导入情况：**
+
+- org.springframework.web.servlet.HandlerMapping
+  - RequestMappingHandlerMapping
+  - BeanNameUrlHandlerMapping
+- org.springframework.web.servlet.HandlerAdapter
+  - RequestMappingHandlerAdapter
+  - HttpRequestHandlerAdapter
+  - SimpleControllerHandlerAdapter
+- org.springframework.web.servlet.HandlerExceptionResolver
+  - ExceptionHandlerExceptionResolver
+  - ResponseStatusExceptionResolver
+  - DefaultHandlerExceptionResolver
+
+**同时配置`<mvc:default-servlet-handler />`和`<mvc:annotation-driven />`后：**
+
+- org.springframework.web.servlet.HandlerMapping
+
+  - **RequestMappingHandlerMapping**	：支持@RequestMapping注解
+  - BeanNameUrlHandlerMapping ：将controller类的名字映射为请求url
+  - SimpleUrlHandlerMapping
+
+- org.springframework.web.servlet.HandlerAdapter
+
+  - **RequestMappingHandlerAdapter** ： 处理@Controller和@RequestMapping注解的处理器 
+  - HttpRequestHandlerAdapter ： 处理继承了HttpRequestHandler创建的处理器 
+  - SimpleControllerHandlerAdapter ： 处理继承自Controller接口的处理器
+
+- org.springframework.web.servlet.HandlerExceptionResolver
+
+  - ExceptionHandlerExceptionResolver
+
+  - ResponseStatusExceptionResolver
+
+  - DefaultHandlerExceptionResolver
+
+    
+
+**RequestMappingHandlerMapping**：
+
+​	在容器启动时，扫描容器内的bean，解析带有@RequestMapping 注解的方法，并将其解析为url和handlerMethod键值对方式注册到请求映射表中。
 
 ### 6.2.3、 `<mvc:resources />` 
 

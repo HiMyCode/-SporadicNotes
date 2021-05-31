@@ -20,7 +20,7 @@
      - **@Import({AutoConfigurationImportSelector.class})**
 
      		扫描所有jar包类路径下 META‐INF/spring.factories；
-	
+		
      		把扫描到的文件解析成properties对象；
 				
      		从properties中获取到EnableAutoConfiguration.class类（类名）的值，将其添加到容器。    
