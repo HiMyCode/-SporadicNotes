@@ -1335,11 +1335,484 @@ debug=true
 </dependency>
 ```
 
+# 六、SpringBoot缓存
+
+## 6.1、Caching核心接口
+
+**JSR107 中定义了Java Caching 的5个核心接口：**
+
+- CachingProvider
+
+  用于创建、配置、获取、管理和控制多个CacheManager 。
+
+- CacheManager
+
+  用于创建、配置、获取、管理和控制多个唯一命名的Cache 。
+
+  一个CacheManager隶属一个CachingProvider 。
+
+- Cache
+
+  以类似Map的数据结构临时存储以Key为索引的值。
+
+  一个Cache隶属一个CacheManager。
+
+- Entry 
+
+  存储在Cache中的key-value对。
+
+- Expiry  
+
+  Entry 在Cache中的有效期。过期的Entry将不可访问、更新和删除。
+
+## 6.2、Caching原理
+
+### 6.2.1、RedisCaching原理
 
 
-# 六、Spring Boot实战
 
-## 6.1、Spring Boot使用jsp
+
+
+## 6.3、自定义Caching组件
+
+### 6.3.1、自定义keyGenerator
+
+
+
+
+
+## 6.4、常用注解
+
+### 6.4.1、@ Cacheable注解
+
+**作用：**
+
+​	标注在方法上。当方法被调用时，优先去缓存中查找：
+
+​	1）若缓存中有：返回缓存中的数据；
+
+​	2）若缓存中无：执行方法，并将方法返回结果放入缓存。
+
+**参数说明：**
+
+- value  &&  cacheNames ： 指定Cache缓存名
+
+  支持同一个方法关联多个缓存。执行方法前，检查关联的所有缓存，只要命中任一缓存，则返回缓存中的值。
+
+- key ： 指定缓存数据使用的key(可使用Spel表达式)
+
+  若没有参数,则使用0作为key；
+
+  若只有一个参数，使用该参数作为key;
+
+  若有多个参数，使用包含所有参数的hashCode作为key 。
+
+  **key 和 keyGenerator：key是互斥参数。**
+
+- keyGenerator：key的生成器
+
+  默认生成器：SimpleKeyGenerator
+
+  自定义生成器：
+
+  **key 和 keyGenerator：key是互斥参数。**
+
+- cacheManager：指定缓存管理器
+
+  默认缓存管理器：ConcurrentMapCacheManager
+
+  自定义缓存管理器：
+
+  
+
+  **cacheManager 和 cacheResolver 是互斥参数，同时指定两个可能会导致异常。** 
+
+- cacheResolver：指定缓存解析器
+
+  默认缓存解析器：
+
+  自定义缓存解析器：
+
+  **cacheManager 和 cacheResolver 是互斥参数，同时指定两个可能会导致异常。** 
+
+- sync
+
+  是否同步。
+
+  多线程环境中，方法若被相同参数并发调用，则相同参数也会导致方法被多次调用，达不到缓存的目的。
+
+  设置 sync = true 可有效避免缓存击穿问题。 
+
+- condition
+
+  调用前判断使用缓存的条件。接收一个结果为 true 或 false 的表达式(支持 SpEL) 。
+
+  ​	若表达式为 true：查缓存，有则返回；没有则执行方法，若方法返回不空则添加缓存；
+
+  ​	若表达式为 false：方法一定会被执行，且返回结果不会被返回。
+
+  eg：condition = '#id>0'  当参数大于0是，才走缓存逻辑。
+
+- unless
+
+  执行后判断是否缓存的条件。接收一个结果为 true 或 false 的表达式(支持 SpEL) 。
+
+  ​	若表达式为 true：不缓存。 
+
+- condition && unless
+
+  condition 不指定相当于 true，unless 不指定相当于 false
+
+　　　　当 condition = false，一定不会缓存；
+
+　　　　当 condition = true，且 unless = true，不缓存；
+
+　　　　当 condition = true，且 unless = false，缓存；
+
+
+
+### 6.4.2、@ CacheEvict注解
+
+- value && cacheNames
+- key
+- keyGenerator
+- cacheManager
+- cacheResolver
+- condition
+- allEntries ：是否删除value 或 cacheNames 指定的整个缓存
+- beforeInvocation：是否在执行对应方法之前删除缓存，默认 false（即执行方法后再删除缓存） 
+  - 若先删除缓存成功，再删除db失败，则查询会直达数据库，造成压力；
+  - 若先删除 db 成功，再删除缓存失败，则会造成缓存脏数据。
+
+
+
+### 6.4.3、@ CachePut 注解
+
+​	在不影响方法执行的情况下更新缓存 。
+
+- value && cacheNames
+- key
+- keyGenerator
+- cacheManager
+- cacheResolver
+- condition
+- unless
+
+**@CachePut 与@Cacheable 的区别：**
+
+@Cacheable：
+
+​	查找缓存  -> 有则返回，无则执行方法体 -> 返回结果，并将结果缓存;
+
+@CachePut：
+
+​	执行方法体 - 将结果缓存起来；
+
+所以 @Cacheable 适用于查询数据的方法，@CachePut 适用于更新数据的方法。
+
+### 6.4.4、@ Caching 注解
+
+**作用：**
+
+​	重新组合应用于同一个方法的多个缓存 。
+
+**参数：**
+
+- cacheable ： 存放Cacheable[]数组
+- put ： 存放CachePut[]数组
+- evict： 存放CacheEvict[]数组
+
+### 6.4.5、@ CacheConfig 注解
+
+**作用：**
+
+​	抽取类中的所有@CachePut@Cacheable@CacheEvict的公共配置 。
+
+**参数：**
+
+- cacheNames
+
+- keyGenerator
+
+- cacheManager
+
+- cacheResolver
+
+  
+
+**注解Value使用的SpEL**
+
+| 名称          | 位置                     | 描述                                                         | 示例                               |
+| ------------- | ------------------------ | ------------------------------------------------------------ | ---------------------------------- |
+| methodName    | root对象                 | 当前被调用的方法名                                           | #root.methodName #root.method.name |
+| method        | root对象                 | 当前被调用的方法                                             | #root.method                       |
+| target        | root对象                 | 当前被调用的目标对象                                         | #root.target                       |
+| targetClass   | root对象                 | 当前被调用的目标对象类                                       | #root.targetClass                  |
+| args          | root对象                 | 当前被调用的方法的参数列表                                   | #root.args[0]                      |
+| caches        | root对象                 | 当前方法调用使用的缓存列表（如@Cacheable(value={"cache1", "cache2"})） | root.caches[0].name                |
+| argument name | evaluation<br /> context | 方法参数的名字. 可以直接 #参数名 ，也可以使用 #p0或#a0 的形式，0代表参数的索引 | iban 、 #a0 、  #p0                |
+| result        | evaluation<br /> context | 方法执行后的返回值  （仅当方法执行之后的判断有效 )           | #result                            |
+
+## 6.5、Springboot使用RedisCache
+
+### 6.5.1、RedisCache自动配置前提
+
+1. 使用注解@EnableCaching
+
+   ```java
+   @Configuration
+   @EnableCaching
+   public class MyCacheConfig {
+   }
+   ```
+
+2. 导入Redis依赖
+
+   ```xml
+   <dependency>
+       <groupId>org.springframework.boot</groupId>
+       <artifactId>spring-boot-starter-data-redis</artifactId>
+   </dependency>
+   ```
+
+   RedisCache自动配置原理，为容器中添加RedisCacheManager组件:
+
+   ```java
+   @Configuration
+   @ConditionalOnClass({RedisConnectionFactory.class})
+   @AutoConfigureAfter({RedisAutoConfiguration.class})
+   @ConditionalOnBean({RedisConnectionFactory.class})
+   @ConditionalOnMissingBean({CacheManager.class})
+   @Conditional({CacheCondition.class})
+   class RedisCacheConfiguration {
+       private final CacheProperties cacheProperties;
+       private final CacheManagerCustomizers customizerInvoker;
+       private final org.springframework.data.redis.cache.RedisCacheConfiguration redisCacheConfiguration;
+   
+       @Bean
+       public RedisCacheManager cacheManager(RedisConnectionFactory redisConnectionFactory, ResourceLoader resourceLoader) {
+           RedisCacheManagerBuilder builder = RedisCacheManager.builder(redisConnectionFactory).cacheDefaults(this.determineConfiguration(resourceLoader.getClassLoader()));
+           List<String> cacheNames = this.cacheProperties.getCacheNames();
+           if (!cacheNames.isEmpty()) {
+               builder.initialCacheNames(new LinkedHashSet(cacheNames));
+           }
+           return (RedisCacheManager)this.customizerInvoker.customize(builder.build());
+       }
+   }
+   ```
+
+   
+
+
+
+# 七、Springboot整合
+
+## 7.1、Springboot整合Redis
+
+1. 导入依赖
+
+   ```xml
+   <dependency>
+       <groupId>org.springframework.boot</groupId>
+       <artifactId>spring-boot-starter-data-redis</artifactId>
+   </dependency>
+   ```
+
+   上述依赖导入下述依赖：
+
+   ```xml
+   <!-- spring-data-redis导入 RedisOperations.class 类 -->
+   <dependency>
+         <groupId>org.springframework.data</groupId>
+         <artifactId>spring-data-redis</artifactId>
+         <version>2.1.10.RELEASE</version>
+         <scope>compile</scope>
+   </dependency>
+   ```
+
+   RedisAutoConfiguration自动配置原理：
+
+   ```java
+   @Configuration
+   @ConditionalOnClass({RedisOperations.class})
+   @EnableConfigurationProperties({RedisProperties.class})
+   @Import({LettuceConnectionConfiguration.class, JedisConnectionConfiguration.class})
+   public class RedisAutoConfiguration {
+       public RedisAutoConfiguration() {
+       }
+       
+       @Bean
+       @ConditionalOnMissingBean( name = {"redisTemplate"} )
+       public RedisTemplate<Object, Object> redisTemplate(RedisConnectionFactory redisConnectionFactory) throws UnknownHostException {
+           RedisTemplate<Object, Object> template = new RedisTemplate();
+           template.setConnectionFactory(redisConnectionFactory);
+           return template;
+       }
+   
+       @Bean
+       @ConditionalOnMissingBean
+       public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory redisConnectionFactory) throws UnknownHostException {
+           StringRedisTemplate template = new StringRedisTemplate();
+           template.setConnectionFactory(redisConnectionFactory);
+           return template;
+       }
+   }
+   ```
+
+2. 添加配置
+
+   ```yaml
+   ## config for simpleCacheRedis
+   spring.redis.host=127.0.0.1
+   ```
+
+   ```java
+   @Configuration
+   public class SimpleRedisConfig {
+   
+       /**
+        * 仅为 Employee 对象的存储提供序列化
+        */
+       @Bean
+       public RedisTemplate<Object, Employee> employeeRedisTemplate(RedisConnectionFactory factory){
+           RedisTemplate<Object, Employee> employeeTemplate = new RedisTemplate<>();
+           employeeTemplate.setConnectionFactory(factory);
+           Jackson2JsonRedisSerializer<Employee> serializer = new Jackson2JsonRedisSerializer<Employee>(Employee.class);
+           employeeTemplate.setDefaultSerializer(serializer);
+           return employeeTemplate;
+       }
+   
+       /**
+        * 为 Object 对象的存储提供通用序列化
+        */
+       @Bean
+       public RedisTemplate<Object, Object> objectRedisTemplate(RedisConnectionFactory factory){
+           RedisTemplate<Object, Object> objectTemplate = new RedisTemplate<>();
+           objectTemplate.setConnectionFactory(factory);
+           Jackson2JsonRedisSerializer<Object> serializer = new Jackson2JsonRedisSerializer<>(Object.class);
+           objectTemplate.setDefaultSerializer(serializer);
+           return objectTemplate;
+       }
+   }
+   ```
+
+3. Redis的使用
+
+   ```java
+   @RunWith(SpringRunner.class)
+   @SpringBootTest(classes = SpringbootApplication.class)
+   public class SimpleRedisTest {
+   
+       @Autowired
+       private StringRedisTemplate stringRedisTemplate;
+   
+       @Autowired
+       private RedisTemplate<Object, Employee> employeeRedisTemplate;
+   
+       @Autowired
+       private RedisTemplate redisTemplate;
+   
+       @Autowired
+       private EmployeeService employeeService;
+   
+       @Test
+       public void testRedisOptions(){
+   
+           // redis字符串存取测试
+           stringRedisTemplate.opsForValue().append("testStr", "test first");
+           String resultTestStr = stringRedisTemplate.opsForValue().get("testStr");
+           Assert.assertTrue( "test first".equals(resultTestStr) );
+   
+           // redis列表存取测试
+           stringRedisTemplate.opsForList().leftPush("testList", "testList001");
+           stringRedisTemplate.opsForList().rightPush("testList", "testList002");
+           String testList001 = stringRedisTemplate.opsForList().leftPop("testList");
+           String testList002 = stringRedisTemplate.opsForList().rightPop("testList");
+           Assert.assertTrue( "testList001".equals(testList001) );
+           Assert.assertTrue( "testList002".equals(testList002) );
+   
+           /**
+            * redis对象存取测试
+            *  1.保存的对象需要实现Serializable序列化接口
+            *  2.默认使用jdk序列化机制，将序列化后的数据保存在redis中
+            *  3.自定义使用json序列化
+            *      1）将对象手动转为json格式
+            *      2）改变默认的序列化机制，参照配置文件：SimpleRedisConfig
+            */
+           Employee employee = employeeService.getEmpById(1);
+           redisTemplate.opsForValue().set("testObject001", employee);
+   
+           // redis对象存取测试：使用自定义序列化方法的 RedisTemplate
+           employeeRedisTemplate.opsForValue().set("testObject002", employee);
+       }
+   }
+   ```
+
+   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+- application.properties
+
+```yaml
+## 开启springBoot的debug模式，控制台会打印自动配置报告
+debug=true
+```
+
+
+
+
+
+- 配置文件处理器    
+
+```xml
+<!‐‐导入配置文件处理器，配置文件进行绑定就会有提示‐‐>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring‐boot‐configuration‐processor</artifactId>
+    <optional>true</optional>
+</dependency>
+```
+
+
+
+# 八、Spring Boot实战
+
+## 8.1、Spring Boot使用jsp
 
 1. 导入SpringBoot的tomcat启动插件jar包
 
